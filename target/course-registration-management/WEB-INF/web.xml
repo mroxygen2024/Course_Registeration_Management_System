@@ -8,23 +8,6 @@
         <param-value>Adama Science and Technology University</param-value>
     </context-param>
 
-    <context-param>
-        <param-name>dbUrl</param-name>
-        <param-value>jdbc:mysql://localhost:3306/school</param-value>
-    </context-param>
-    <context-param>
-        <param-name>dbUser</param-name>
-        <param-value>root</param-value>
-    </context-param>
-    <context-param>
-        <param-name>dbPassword</param-name>
-        <param-value>password</param-value>
-    </context-param>
-    <context-param>
-        <param-name>jdbcDriver</param-name>
-        <param-value>com.mysql.cj.jdbc.Driver</param-value>
-    </context-param>
-
     <servlet>
         <servlet-name>RegisterServlet</servlet-name>
         <servlet-class>com.example.servlet.RegisterServlet</servlet-class>

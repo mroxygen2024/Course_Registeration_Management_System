@@ -2,7 +2,6 @@ package com.example.servlet;
 
 import com.example.model.Student;
 import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -31,28 +30,30 @@ public class StudentServlet extends HttpServlet {
 
     @Override
     public void init() throws ServletException {
-        ServletContext context = getServletContext();
         Map<String, String> fileEnv = loadDotEnv();
 
         dbUrl = firstNonEmpty(
                 getEnvValue("DB_URL", fileEnv),
-                buildPostgresUrl(fileEnv),
-                context.getInitParameter("dbUrl"));
+                buildPostgresUrl(fileEnv));
 
         dbUser = firstNonEmpty(
                 getEnvValue("DB_USER", fileEnv),
-                getEnvValue("PGUSER", fileEnv),
-                context.getInitParameter("dbUser"));
+                getEnvValue("PGUSER", fileEnv));
 
         dbPassword = firstNonEmpty(
                 getEnvValue("DB_PASSWORD", fileEnv),
-                getEnvValue("PGPASSWORD", fileEnv),
-                context.getInitParameter("dbPassword"));
+                getEnvValue("PGPASSWORD", fileEnv));
 
         jdbcDriver = firstNonEmpty(
                 getEnvValue("DB_DRIVER", fileEnv),
-                context.getInitParameter("jdbcDriver"),
                 inferDriver(dbUrl));
+
+        if (dbUrl == null || dbUser == null || dbPassword == null) {
+            throw new ServletException("Database configuration missing. Set DB_URL/DB_USER/DB_PASSWORD or PGHOST/PGDATABASE/PGUSER/PGPASSWORD in .env or environment.");
+        }
+        if (jdbcDriver == null) {
+            jdbcDriver = "org.postgresql.Driver";
+        }
 
         try {
             Class.forName(jdbcDriver);
