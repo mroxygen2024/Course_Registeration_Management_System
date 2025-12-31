@@ -1,0 +1,6 @@
+com/example/servlet/MessageServlet.class
+com/example/servlet/StudentServlet.class
+com/example/model/Student.class
+com/example/servlet/RegisterServlet.class
+com/example/servlet/ConfirmationServlet.class
+com/example/servlet/LoginServlet.class
