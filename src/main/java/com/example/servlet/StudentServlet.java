@@ -1,6 +1,8 @@
 package com.example.servlet;
 
 import com.example.model.Student;
+import io.github.cdimascio.dotenv.Dotenv;
+import io.github.cdimascio.dotenv.DotenvEntry;
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -8,10 +10,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -49,7 +47,8 @@ public class StudentServlet extends HttpServlet {
                 inferDriver(dbUrl));
 
         if (dbUrl == null || dbUser == null || dbPassword == null) {
-            throw new ServletException("Database configuration missing. Set DB_URL/DB_USER/DB_PASSWORD or PGHOST/PGDATABASE/PGUSER/PGPASSWORD in .env or environment.");
+            throw new ServletException(
+                    "Database configuration missing. Set DB_URL/DB_USER/DB_PASSWORD or PGHOST/PGDATABASE/PGUSER/PGPASSWORD in .env or environment.");
         }
         if (jdbcDriver == null) {
             jdbcDriver = "org.postgresql.Driver";
@@ -64,33 +63,25 @@ public class StudentServlet extends HttpServlet {
 
     private Map<String, String> loadDotEnv() {
         Map<String, String> values = new HashMap<>();
-        String base = System.getProperty("catalina.base", System.getProperty("user.dir"));
-        Path envPath = Paths.get(base, ".env");
-        if (!Files.exists(envPath)) {
-            return values;
-        }
-        try {
-            for (String line : Files.readAllLines(envPath, StandardCharsets.UTF_8)) {
-                String trimmed = line.trim();
-                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-                    continue;
-                }
-                int idx = trimmed.indexOf('=');
-                if (idx <= 0) {
-                    continue;
-                }
-                String key = trimmed.substring(0, idx).trim();
-                String value = trimmed.substring(idx + 1).trim();
-                if ((value.startsWith("\"") && value.endsWith("\""))
-                        || (value.startsWith("'") && value.endsWith("'"))) {
-                    value = value.substring(1, value.length() - 1);
-                }
-                values.put(key, value);
-            }
-        } catch (IOException e) {
-            // If the file cannot be read, fall back to other sources silently.
-        }
+
+        // Prefer catalina.base/.env (Tomcat) then project working dir/.env
+        mergeDotenv(values, System.getProperty("catalina.base"));
+        mergeDotenv(values, System.getProperty("user.dir"));
         return values;
+    }
+
+    private void mergeDotenv(Map<String, String> target, String directory) {
+        if (directory == null) {
+            return;
+        }
+        Dotenv dotenv = Dotenv.configure()
+                .directory(directory)
+                .ignoreIfMalformed()
+                .ignoreIfMissing()
+                .load();
+        for (DotenvEntry entry : dotenv.entries()) {
+            target.putIfAbsent(entry.getKey(), entry.getValue());
+        }
     }
 
     private String getEnvValue(String key, Map<String, String> fileEnv) {
