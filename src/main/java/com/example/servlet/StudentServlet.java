@@ -9,13 +9,19 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class StudentServlet extends HttpServlet {
     private String dbUrl;
@@ -26,16 +32,103 @@ public class StudentServlet extends HttpServlet {
     @Override
     public void init() throws ServletException {
         ServletContext context = getServletContext();
-        dbUrl = context.getInitParameter("dbUrl");
-        dbUser = context.getInitParameter("dbUser");
-        dbPassword = context.getInitParameter("dbPassword");
-        jdbcDriver = context.getInitParameter("jdbcDriver");
+        Map<String, String> fileEnv = loadDotEnv();
+
+        dbUrl = firstNonEmpty(
+                getEnvValue("DB_URL", fileEnv),
+                buildPostgresUrl(fileEnv),
+                context.getInitParameter("dbUrl"));
+
+        dbUser = firstNonEmpty(
+                getEnvValue("DB_USER", fileEnv),
+                getEnvValue("PGUSER", fileEnv),
+                context.getInitParameter("dbUser"));
+
+        dbPassword = firstNonEmpty(
+                getEnvValue("DB_PASSWORD", fileEnv),
+                getEnvValue("PGPASSWORD", fileEnv),
+                context.getInitParameter("dbPassword"));
+
+        jdbcDriver = firstNonEmpty(
+                getEnvValue("DB_DRIVER", fileEnv),
+                context.getInitParameter("jdbcDriver"),
+                inferDriver(dbUrl));
 
         try {
             Class.forName(jdbcDriver);
         } catch (ClassNotFoundException e) {
             throw new ServletException("JDBC Driver not found", e);
         }
+    }
+
+    private Map<String, String> loadDotEnv() {
+        Map<String, String> values = new HashMap<>();
+        String base = System.getProperty("catalina.base", System.getProperty("user.dir"));
+        Path envPath = Paths.get(base, ".env");
+        if (!Files.exists(envPath)) {
+            return values;
+        }
+        try {
+            for (String line : Files.readAllLines(envPath, StandardCharsets.UTF_8)) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                int idx = trimmed.indexOf('=');
+                if (idx <= 0) {
+                    continue;
+                }
+                String key = trimmed.substring(0, idx).trim();
+                String value = trimmed.substring(idx + 1).trim();
+                if ((value.startsWith("\"") && value.endsWith("\""))
+                        || (value.startsWith("'") && value.endsWith("'"))) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                values.put(key, value);
+            }
+        } catch (IOException e) {
+            // If the file cannot be read, fall back to other sources silently.
+        }
+        return values;
+    }
+
+    private String getEnvValue(String key, Map<String, String> fileEnv) {
+        String sys = System.getenv(key);
+        if (sys != null && !sys.isEmpty()) {
+            return sys;
+        }
+        String fromFile = fileEnv.get(key);
+        if (fromFile != null && !fromFile.isEmpty()) {
+            return fromFile;
+        }
+        return null;
+    }
+
+    private String buildPostgresUrl(Map<String, String> fileEnv) {
+        String host = getEnvValue("PGHOST", fileEnv);
+        String database = getEnvValue("PGDATABASE", fileEnv);
+        if (host == null || database == null) {
+            return null;
+        }
+        String port = firstNonEmpty(getEnvValue("PGPORT", fileEnv), "5432");
+        String sslmode = firstNonEmpty(getEnvValue("PGSSLMODE", fileEnv), "require");
+        return "jdbc:postgresql://" + host + ":" + port + "/" + database + "?sslmode=" + sslmode;
+    }
+
+    private String inferDriver(String url) {
+        if (url != null && url.startsWith("jdbc:postgresql:")) {
+            return "org.postgresql.Driver";
+        }
+        return null;
+    }
+
+    private String firstNonEmpty(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isEmpty()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     @Override
